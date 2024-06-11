@@ -15,4 +15,4 @@ _Syntaxe is a declarative data querying library inspired by graphql._
 
 Syntaxe Dotnet is based on the original syntaxe engine to support declarative data fetching and querying when building dotnet applications.
 
-### PLEASE NOTE THAT THIS PROJECT IS STILL IN ACTIVE DEVELOPMENT AND ITS CODEBASE SHOULD NOT BE CONSIDERED AS THE FINAL PRODUCT
+### PLEASE NOTE THAT THIS PROJECT IS STILL IN ACTIVE DEVELOPMENT AND ITS CODEBASE SHOULD NOT BE CONSIDERED AS THE FINAL PRODUCT 
