@@ -48,6 +48,7 @@
         public string[]? Operation { get; set; }
         public string? Condition { get; set; }
         public bool? Omit { get; set; }
+        public string? Alias { get; set; }
     }
 
     internal class IObjectOperationConfig
@@ -68,12 +69,12 @@
     {
         public dynamic Data { get; set; }
         public dynamic? Status { get; set; }
-        public dynamic? Schema { get; set; }
+        public Dictionary<string, object>? Schema { get; set; }
     }
 
     internal class ISchemaWalkThroughContextConfig
     {
-        public dynamic? Schema { get; set; }
+        public Dictionary<string, object>? Schema { get; set; }
         public dynamic? Subject { get; set; }
         public dynamic? Mode { get; set; }
     }

@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Net;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace SyntaxeDotNet
@@ -48,12 +49,12 @@ namespace SyntaxeDotNet
                 // define omission regex
                 var omissionRegex = SyntaxeRogueFunctions.Regexify(Patterns.General.Omission, false, true);
                 // Check omission operator
-                var omissionStatus = Regex.IsMatch(prop, omissionRegex);
+                var omissionStatus = Regex.IsMatch(prop.Trim(), omissionRegex);
 
                 // Add property and info to state
                 Holder.PropertyOps!.Add(name, new IPropertyOperationConfig
                 {
-                    Property = Regex.Replace(prop, omissionRegex, string.Empty),
+                    Property = Regex.Replace(prop, omissionRegex, string.Empty).Trim(),
                     Operation = operationsList.ToArray(),
                     Condition = propertyCondition,
                     Omit = omissionStatus
@@ -179,7 +180,7 @@ namespace SyntaxeDotNet
         public async Task<dynamic> WalkThroughHandler(IWalkThroughContextConfig context)
         {
             // Check if no schema
-            if (context.Schema == null)
+            if (context!.Schema == null || context!.Schema.Count < 1)
                 return null!;
 
             try
@@ -199,7 +200,7 @@ namespace SyntaxeDotNet
                     : subject;
 
                 // Check if root operations available
-                if (Holder.RootOp!.Length > 0)
+                if (Holder.RootOp != null && Holder.RootOp!.Length > 0)
                 {
                     // Create new random name
                     var name = @$"*instr-p:id_{SyntaxeRogueFunctions.GetRandomKey()}";
@@ -249,20 +250,21 @@ namespace SyntaxeDotNet
             dynamic result = new Dictionary<string, dynamic>();
             var schemaPass = true;
             var schemaPassSet = new HashSet<bool>();
-            dynamic filtered = null!;
+            var filtered = string.Empty;
 
             // Check if array
             if (context.Subject!.GetType().IsArray)
             {
                 // Change result to array
-                result = new List<dynamic>[] {};
+                result = new List<dynamic>() {};
+                var jsonHandler = new SyntaxeJsonHandler();
                 // Loop through data array
                 foreach (var item in context.Subject)
                 {
                     var line = await schemaWalkThrough(new ISchemaWalkThroughContextConfig
                     {
                         Schema = context.Schema,
-                        Subject = context.Subject,
+                        Subject = jsonHandler.ParseJson(JsonSerializer.Serialize(item)),
                         Mode = context.Mode
                     });
                     // Check if this line should be added to results
@@ -271,7 +273,118 @@ namespace SyntaxeDotNet
                 }
             } else
             {
+                // Define schema properties and counter
+                var properties = context!.Schema!.Keys;
+                var keyCounter = -1;
 
+                // Loop through schema
+                foreach (var keyDel in properties)
+                {
+                    // Increase counter
+                    ++keyCounter;
+
+                    // Define property pass and set
+                    var keyPass = true;
+                    var keyPassSet = new HashSet<bool>();
+                    IPropertyOperationConfig propertyInfo = null!;
+                    var keyOmissionRegex = SyntaxeRogueFunctions.Regexify(Patterns.General!.Omission, false, true);
+                    var keyOmissionStatus = Regex.IsMatch(keyDel, keyOmissionRegex);
+                    var keyAsIs = keyDel;
+
+                    // Normalize key
+                    var key = Regex.Replace(keyDel, keyOmissionRegex, string.Empty);
+
+                    // Check if property has operations
+                    if (Holder.PropertyOps!.ContainsKey(key))
+                    {
+                        // Get property info
+                        propertyInfo = Holder.PropertyOps[key];
+                        // Get value of property
+                        var value = context.Subject![propertyInfo.Property];
+
+                        // Check if property exists in normal schema
+                        if (context.Subject!.ContainsKey(propertyInfo.Property))
+                        {
+                            // Loop through operations
+                            for (var ndex = 0; ndex < propertyInfo.Operation!.Length; ndex++)
+                            {
+                                // Get current operation
+                                var o = propertyInfo.Operation[ndex];
+
+                                // Get first colon
+                                var firstColonIndex = o.IndexOf(":");
+                                // Get left and right side
+                                var leftSide = firstColonIndex >= 0 ? o.Substring(0, firstColonIndex) : o;
+                                var rightSide = firstColonIndex >= 0 ? o.Substring(++firstColonIndex) : string.Empty;
+                                Dictionary<string, object> operationObject = null!;
+                                // Ensure left side always has operation
+                                leftSide = leftSide.Length > 0 ? leftSide : rightSide;
+
+                                // Filter value is right side is 
+                                filtered = (rightSide.Length > 0) ? Regex.Replace(rightSide.ToString(), SyntaxeRogueFunctions.Regexify(Patterns.General.Quotes, true, true), string.Empty) : string.Empty;
+
+                                // Define haystack
+                                var haystack = new List<object>();
+                                // Check if haystack operation
+                                if (HayStackOperations.All.Contains(leftSide))
+                                {
+                                    // Get operation values without the brackets
+                                    var operationValues = Regex.Replace(filtered, SyntaxeRogueFunctions.Regexify(Patterns.General.Operation, true, true), string.Empty).Split(',').ToList();
+                                    operationValues
+                                        .ForEach(x =>
+                                        {
+                                            var trimmedEntity = Regex.Replace(x.ToString().Trim(), SyntaxeRogueFunctions.Regexify(Patterns.General.Quotes, true, true), string.Empty);
+                                            haystack.Add(HayStackOperations.NumberBound.Contains(leftSide) ? int.Parse(trimmedEntity) : trimmedEntity);
+                                        });
+                                }
+
+                                // Check the left side
+                                switch (leftSide)
+                                { 
+                                    case SchemaOperators.Alias: // Substitute property name
+                                        propertyInfo.Alias = filtered;
+                                        break;
+                                    case SchemaOperators.RemoveExtraWhitespace: // Remove extra whitespace
+                                        value = Whitespace.RemoveExtra(value, leftSide, filtered);
+                                        break;
+                                    case SchemaOperators.RemoveWhitespace: // Remove whitespace
+                                        value = Whitespace.Remove(value, leftSide, filtered);
+                                        break;
+                                    case SchemaOperators.EqualTo: // Equal to
+                                        keyPass = (value == filtered);
+                                        break;
+                                    case SchemaOperators.EqualToCaseInsensitive: // Equal to / case-insensitive
+                                        keyPass = (value.ToString().ToLower() == filtered.ToLower());
+                                        break;
+                                }
+
+                                // Add key pass to its set
+                                keyPassSet.Add(keyPass);
+                            }
+
+                            // Place key and its value in new schema / if no omission operator
+                            if (propertyInfo.Omit != true)
+                                result[!string.IsNullOrEmpty(propertyInfo.Alias) ? propertyInfo.Alias : propertyInfo.Property] = value;
+                        }
+                    } 
+                    // Check if property exists in normal schema
+                    else
+                    {
+
+                    }
+
+                    // Add key pass from key pass set to schema pass set
+                    schemaPassSet.Add((keyPassSet.Count > 1)
+                        ? (propertyInfo.Condition!.ToString() == "or" ? true : false)
+                        : (keyPassSet.Count > 0) ? keyPassSet.ElementAt(0) : keyPass);
+                }
+
+                // Compute pass
+                schemaPass = (Holder.PropertyOps!.Count < 1)
+                    ? true
+                    : (schemaPassSet.Count > 1)
+                        ? ((context.Mode ?? Holder.Mode) == "or" ? true : false)
+                        : schemaPassSet.ElementAt(0);
             }
 
             return await Task.FromResult(new ISchemaWalkthroughResult

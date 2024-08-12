@@ -3,13 +3,13 @@
     public class ISyntaxeConfig
     {
         public dynamic? Data { get; set; }
-        public dynamic? Schema { get; set; }
+        public string? Schema { get; set; }
     }
 
     public class Syntaxe
     {
         private dynamic QueryData = null!;
-        private dynamic QuerySchema = null!;
+        private string QuerySchema = string.Empty;
         public bool Success = false;
         public string Error = string.Empty;
 
@@ -20,28 +20,12 @@
         {
             if (config != null)
             {
-                QueryData = config!.Data!;
-                QuerySchema = config!.Schema!;
+                QueryData = config!.Data! ?? QueryData;
+                QuerySchema = config!.Schema! ?? QuerySchema;
             }
 
             Success = false;
             Error = string.Empty;
-        }
-
-        public Syntaxe Schema(string schema)
-        {
-            if (!string.IsNullOrEmpty(schema))
-                QuerySchema = schema!;
-
-            return this;
-        }
-
-        public Syntaxe Data(dynamic data)
-        {
-            if (data != null)
-                QueryData = data!;
-
-            return this;
         }
 
         public async Task<dynamic> Query() => await QueryDelegte(null!);
@@ -64,7 +48,7 @@
 
                 var engine = new SyntaxeEngine();
 
-                IFilterSchemaResponse filtered = await engine.FilterSchema(QuerySchema);
+                IFilterSchemaResponse filtered = await engine.FilterSchema(QuerySchema!);
 
                 if (filtered.Status == true)
                 {
@@ -94,6 +78,22 @@
                 Error = ex.ToString();
                 return QueryData;
             }
+        }
+
+        public Syntaxe Schema(string schema)
+        {
+            if (!string.IsNullOrEmpty(schema))
+                QuerySchema = schema!;
+
+            return this;
+        }
+
+        public Syntaxe Data(dynamic data)
+        {
+            if (data != null)
+                QueryData = data!;
+
+            return this;
         }
     }
 }
